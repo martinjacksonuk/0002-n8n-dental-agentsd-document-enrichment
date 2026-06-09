@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "n8n-mcp": {
+      "command": "/Users/martinjackson/Desktop/vsc-coding-projects/n8n_projects/0002_n8n_dental_agents_document_enrichment/start-mcp.sh",
+      "args": []
+    }
+  }
+}
