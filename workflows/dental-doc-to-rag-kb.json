@@ -1,0 +1,545 @@
+{
+  "name": "Dental Document to RAG KB Ingestion",
+  "nodes": [
+    {
+      "id": "n28",
+      "name": "Airtable Trigger",
+      "type": "n8n-nodes-base.airtableTrigger",
+      "typeVersion": 1,
+      "position": [-200, 0],
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "baseId": { "mode": "id", "value": "appehq5sq1yxVxfuO" },
+        "tableId": { "mode": "id", "value": "tblikMpB0kPTPmU9W" },
+        "triggerField": "created_date",
+        "downloadAttachments": false,
+        "pollTimes": { "item": [{ "mode": "everyMinute" }] },
+        "additionalFields": {
+          "formula": "{status} = \"enrich\""
+        }
+      }
+    },
+    {
+      "id": "n02",
+      "name": "Manual Trigger (Test)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-200, 320],
+      "parameters": {}
+    },
+    {
+      "id": "n03",
+      "name": "Set Test File ID",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [40, 320],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            { "id": "tf1", "name": "id", "type": "string", "value": "TODO_REPLACE_WITH_TEST_FILE_ID" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "n04",
+      "name": "Prompt Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [280, 150],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "assignments": {
+          "assignments": [
+            { "id": "p1", "name": "module1CleanPrompt", "type": "string", "value": "TODO: paste module-1-clean.md contents here" },
+            { "id": "p2", "name": "module2ClassifyPrompt", "type": "string", "value": "TODO: paste module-2-classify.md contents here" },
+            { "id": "p3", "name": "module3ProducePrompt", "type": "string", "value": "TODO: paste module-3-produce-kb.md contents here" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "n05",
+      "name": "Download File",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [520, 150],
+      "parameters": {
+        "operation": "download",
+        "fileId": { "mode": "id", "value": "={{ $json.fields ? $json.fields['Google Doc ID'] : $json.id }}" },
+        "options": { "binaryPropertyName": "data" }
+      }
+    },
+    {
+      "id": "n06",
+      "name": "Detect File Type",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueErrorOutput",
+      "position": [760, 150],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const item = $input.first();\nconst binary = item.binary?.data;\n\nif (!binary) {\n  return [{ json: { ...item.json, file_type: 'unsupported', original_filename: item.json.name || 'unknown' } }];\n}\n\nconst fileName = binary.fileName || item.json.name || 'unknown';\nconst mimeType = (binary.mimeType || '').toLowerCase();\nconst ext = (fileName.split('.').pop() || '').toLowerCase();\n\nlet file_type = 'unsupported';\nif (ext === 'pdf' || mimeType === 'application/pdf') {\n  file_type = 'pdf';\n} else if (ext === 'docx' || mimeType.includes('officedocument.wordprocessingml')) {\n  file_type = 'docx';\n} else if (ext === 'doc' || mimeType === 'application/msword') {\n  file_type = 'doc';\n} else if (ext === 'txt' || mimeType.startsWith('text/plain')) {\n  file_type = 'txt';\n}\n\nreturn [{\n  json: { ...item.json, file_type, original_filename: fileName },\n  binary: item.binary\n}];"
+      }
+    },
+    {
+      "id": "n07",
+      "name": "Route by File Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [1000, 150],
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "outputKey": "pdf",
+              "conditions": {
+                "options": { "version": 2, "leftValue": "", "caseSensitive": true, "typeValidation": "strict" },
+                "combinator": "and",
+                "conditions": [
+                  { "id": "r-pdf", "operator": { "type": "string", "operation": "equals" }, "leftValue": "={{ $json.file_type }}", "rightValue": "pdf" }
+                ]
+              },
+              "renameOutput": true
+            },
+            {
+              "outputKey": "docx",
+              "conditions": {
+                "options": { "version": 2, "leftValue": "", "caseSensitive": true, "typeValidation": "strict" },
+                "combinator": "and",
+                "conditions": [
+                  { "id": "r-docx", "operator": { "type": "string", "operation": "equals" }, "leftValue": "={{ $json.file_type }}", "rightValue": "docx" }
+                ]
+              },
+              "renameOutput": true
+            },
+            {
+              "outputKey": "txt",
+              "conditions": {
+                "options": { "version": 2, "leftValue": "", "caseSensitive": true, "typeValidation": "strict" },
+                "combinator": "and",
+                "conditions": [
+                  { "id": "r-txt", "operator": { "type": "string", "operation": "equals" }, "leftValue": "={{ $json.file_type }}", "rightValue": "txt" }
+                ]
+              },
+              "renameOutput": true
+            },
+            {
+              "outputKey": "doc",
+              "conditions": {
+                "options": { "version": 2, "leftValue": "", "caseSensitive": true, "typeValidation": "strict" },
+                "combinator": "and",
+                "conditions": [
+                  { "id": "r-doc", "operator": { "type": "string", "operation": "equals" }, "leftValue": "={{ $json.file_type }}", "rightValue": "doc" }
+                ]
+              },
+              "renameOutput": true
+            }
+          ]
+        },
+        "options": { "fallbackOutput": "extra", "renameFallbackOutput": "unsupported" }
+      }
+    },
+    {
+      "id": "n08",
+      "name": "Extract PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "onError": "continueErrorOutput",
+      "position": [1240, -150],
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "data",
+        "destinationKey": "pdfData",
+        "options": {}
+      }
+    },
+    {
+      "id": "n08b",
+      "name": "Format PDF Extract",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1360, -150],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const item = $input.first();\nconst { text: rawText, ...rest } = item.json;\nconst text = (rawText || '').trim();\n\nreturn [{\n  json: { ...rest, raw_text: text, is_scanned: text.length < 100 },\n  binary: $('Detect File Type').item.binary\n}];"
+      }
+    },
+    {
+      "id": "n09",
+      "name": "Extract DOCX",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueErrorOutput",
+      "position": [1240, 50],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const zlib = require('zlib');\nconst item = $input.first();\nconst buffer = Buffer.from(item.binary.data.data, 'base64');\n\n// Minimal ZIP reader to pull word/document.xml out of the .docx package\nfunction readZipEntry(buf, entryName) {\n  const eocdSig = 0x06054b50;\n  let eocdOffset = -1;\n  for (let i = buf.length - 22; i >= 0; i--) {\n    if (buf.readUInt32LE(i) === eocdSig) { eocdOffset = i; break; }\n  }\n  if (eocdOffset === -1) throw new Error('Not a valid DOCX (zip) file');\n\n  const cdEntries = buf.readUInt16LE(eocdOffset + 10);\n  let offset = buf.readUInt32LE(eocdOffset + 16);\n\n  for (let i = 0; i < cdEntries; i++) {\n    if (buf.readUInt32LE(offset) !== 0x02014b50) break;\n    const compMethod = buf.readUInt16LE(offset + 10);\n    const compSize = buf.readUInt32LE(offset + 20);\n    const nameLen = buf.readUInt16LE(offset + 28);\n    const extraLen = buf.readUInt16LE(offset + 30);\n    const commentLen = buf.readUInt16LE(offset + 32);\n    const localHeaderOffset = buf.readUInt32LE(offset + 42);\n    const fileName = buf.toString('utf8', offset + 46, offset + 46 + nameLen);\n\n    if (fileName === entryName) {\n      const lfhNameLen = buf.readUInt16LE(localHeaderOffset + 26);\n      const lfhExtraLen = buf.readUInt16LE(localHeaderOffset + 28);\n      const dataStart = localHeaderOffset + 30 + lfhNameLen + lfhExtraLen;\n      const compData = buf.subarray(dataStart, dataStart + compSize);\n      return compMethod === 0 ? compData : zlib.inflateRawSync(compData);\n    }\n\n    offset += 46 + nameLen + extraLen + commentLen;\n  }\n  throw new Error(`Entry ${entryName} not found in DOCX`);\n}\n\nconst xml = readZipEntry(buffer, 'word/document.xml').toString('utf8');\n\nconst text = xml\n  .replace(/<\\/w:p>/g, '\\n')\n  .replace(/<w:tab\\s*\\/>/g, '\\t')\n  .replace(/<[^>]+>/g, '')\n  .replace(/&amp;/g, '&')\n  .replace(/&lt;/g, '<')\n  .replace(/&gt;/g, '>')\n  .replace(/&quot;/g, '\"')\n  .replace(/&apos;/g, \"'\")\n  .trim();\n\nreturn [{ json: { ...item.json, raw_text: text } }];"
+      }
+    },
+    {
+      "id": "n10",
+      "name": "Extract TXT",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueErrorOutput",
+      "position": [1240, 250],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const item = $input.first();\nconst raw_text = Buffer.from(item.binary.data.data, 'base64').toString('utf-8');\n\nreturn [{ json: { ...item.json, raw_text } }];"
+      }
+    },
+    {
+      "id": "n11",
+      "name": "DOC Stub",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1240, 450],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const item = $input.first();\nreturn [{\n  json: {\n    ...item.json,\n    extraction_error: 'DOC (legacy binary Word) format requires LibreOffice conversion on the n8n host, which is not yet configured. Convert this file to .docx or .pdf and re-upload, or configure an Execute Command node running \"libreoffice --headless --convert-to docx\" and route its output into the DOCX extraction branch.'\n  }\n}];"
+      }
+    },
+    {
+      "id": "n12",
+      "name": "Unsupported Stub",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1240, 650],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const item = $input.first();\nreturn [{\n  json: {\n    ...item.json,\n    extraction_error: `Unsupported file type for \"${item.json.original_filename || 'unknown file'}\". Supported types: pdf, docx, doc, txt.`\n  }\n}];"
+      }
+    },
+    {
+      "id": "n13",
+      "name": "Is Scanned PDF?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1480, -150],
+      "parameters": {
+        "conditions": {
+          "options": { "version": 2, "leftValue": "", "caseSensitive": true, "typeValidation": "strict" },
+          "combinator": "and",
+          "conditions": [
+            { "id": "isscan1", "operator": { "type": "boolean", "operation": "true", "singleValue": true }, "leftValue": "={{ $json.is_scanned }}", "rightValue": "" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "n14",
+      "name": "PDF Vision Extract",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "onError": "continueErrorOutput",
+      "position": [1720, -300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: \"gpt-4o\", input: [ { role: \"user\", content: [ { type: \"input_text\", text: \"Extract all text from this scanned document exactly as written, preserving numbers, units, drug names, and formatting. Output plain text only, no commentary.\" }, { type: \"input_file\", filename: $json.original_filename, file_data: \"data:application/pdf;base64,\" + $binary.data.data } ] } ] }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "n15",
+      "name": "Store Vision Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueErrorOutput",
+      "position": [1960, -300],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const item = $input.first();\nconst response = item.json;\nlet text = '';\n\nif (response.output_text) {\n  text = response.output_text;\n} else if (Array.isArray(response.output)) {\n  for (const block of response.output) {\n    if (Array.isArray(block.content)) {\n      for (const c of block.content) {\n        if (c.type === 'output_text' && c.text) text += c.text;\n      }\n    }\n  }\n}\n\nreturn [{\n  json: {\n    ...$('Extract PDF').first().json,\n    raw_text: text.trim()\n  }\n}];"
+      }
+    },
+    {
+      "id": "n16",
+      "name": "Pre-strip Web Chrome",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, 150],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const item = $input.first();\nlet text = item.json.raw_text || '';\n\nconst patterns = [\n  /^\\s*(Skip to (main )?content)\\s*$/gim,\n  /^\\s*(Home|Menu|Navigation)\\s*(\\||>)\\s*.*$/gim,\n  /^\\s*(Share|Tweet|Print|Email) this (page|article).*$/gim,\n  /^\\s*©\\s*\\d{4}.*$/gim,\n  /^\\s*(Follow us on|Find us on)\\s+(Facebook|Twitter|Instagram|LinkedIn).*$/gim,\n  /^\\s*(Privacy Policy|Terms of (Use|Service)|Cookie Policy)\\s*$/gim,\n  /^\\s*Page \\d+ of \\d+\\s*$/gim\n];\n\nfor (const pattern of patterns) {\n  text = text.replace(pattern, '');\n}\n\ntext = text.replace(/\\n{3,}/g, '\\n\\n').trim();\n\nreturn [{ json: { ...item.json, raw_text: text } }];"
+      }
+    },
+    {
+      "id": "n17",
+      "name": "LLM Stage 1 - Clean",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "onError": "continueErrorOutput",
+      "position": [2440, 150],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: \"gpt-4o-mini\", temperature: 0, messages: [ { role: \"system\", content: $('Prompt Config').first().json.module1CleanPrompt }, { role: \"user\", content: $json.raw_text } ] }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "n18",
+      "name": "Store Cleaned Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueErrorOutput",
+      "position": [2680, 150],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const item = $input.first();\nconst content = item.json.choices?.[0]?.message?.content;\n\nif (!content) {\n  throw new Error('Clean stage returned no content. Response: ' + JSON.stringify(item.json).slice(0, 500));\n}\n\nreturn [{ json: { cleaned_text: content } }];"
+      }
+    },
+    {
+      "id": "n19",
+      "name": "LLM Stage 2 - Classify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "onError": "continueErrorOutput",
+      "position": [2920, 150],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: \"gpt-4o-mini\", temperature: 0, messages: [ { role: \"system\", content: $('Prompt Config').first().json.module2ClassifyPrompt }, { role: \"user\", content: $('Store Cleaned Text').first().json.cleaned_text } ], response_format: { type: \"json_schema\", json_schema: { name: \"dental_classification\", strict: true, schema: { type: \"object\", additionalProperties: false, properties: { condition_title: { type: \"string\", description: \"Short title of the dental condition or document subject, suitable for use as a filename (e.g. Acute Apical Abscess)\" }, document_type: { type: \"string\", enum: [\"clinical_guideline\",\"patient_information\",\"protocol\",\"factsheet\",\"other\"], description: \"The type of source document\" }, audience_segments: { type: \"array\", description: \"List of audience-tagged sections found in the document\", items: { type: \"object\", additionalProperties: false, properties: { section_title: { type: \"string\" }, audience: { type: \"string\", enum: [\"Public\",\"Professional\"] } }, required: [\"section_title\",\"audience\"] } }, clinical_figures: { type: \"array\", description: \"All numeric clinical figures (doses, percentages, ranges, age thresholds) found verbatim in the source\", items: { type: \"string\" } }, named_products: { type: \"array\", description: \"All named drugs, irrigants, or products mentioned verbatim in the source\", items: { type: \"string\" } } }, required: [\"condition_title\",\"document_type\",\"audience_segments\",\"clinical_figures\",\"named_products\"] } } } }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "n20",
+      "name": "Parse Classification JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueErrorOutput",
+      "position": [3160, 150],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const item = $input.first();\nconst content = item.json.choices?.[0]?.message?.content;\n\nif (!content) {\n  throw new Error('Classify stage returned no content. Response: ' + JSON.stringify(item.json).slice(0, 500));\n}\n\nlet classification;\ntry {\n  classification = JSON.parse(content);\n} catch (e) {\n  throw new Error(`Classify stage returned invalid JSON: ${e.message}. Content: ${content.slice(0, 500)}`);\n}\n\nconst required = ['condition_title', 'document_type', 'audience_segments', 'clinical_figures', 'named_products'];\nfor (const key of required) {\n  if (!(key in classification)) {\n    throw new Error(`Classification JSON missing required field: ${key}`);\n  }\n}\n\nreturn [{ json: classification }];"
+      }
+    },
+    {
+      "id": "n21",
+      "name": "LLM Stage 3 - Produce KB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "onError": "continueErrorOutput",
+      "position": [3400, 150],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: \"gpt-4o\", temperature: 0.2, messages: [ { role: \"system\", content: $('Prompt Config').first().json.module3ProducePrompt }, { role: \"user\", content: \"Classification JSON:\\n\" + JSON.stringify($('Parse Classification JSON').first().json, null, 2) + \"\\n\\nCleaned source text (verbatim, use unchanged in the full-source section):\\n\" + $('Store Cleaned Text').first().json.cleaned_text } ] }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "n22",
+      "name": "Store KB Markdown",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueErrorOutput",
+      "position": [3640, 150],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const item = $input.first();\nconst md = item.json.choices?.[0]?.message?.content;\n\nif (!md) {\n  throw new Error('Produce KB stage returned no content. Response: ' + JSON.stringify(item.json).slice(0, 500));\n}\n\nconst classification = $('Parse Classification JSON').first().json;\nconst fallbackName = ($('Detect File Type').first().json.original_filename || 'document').replace(/\\.[^.]+$/, '');\nconst baseName = (classification.condition_title || fallbackName)\n  .replace(/[^a-zA-Z0-9 _-]/g, '')\n  .trim()\n  .replace(/\\s+/g, '-');\n\nreturn [{\n  json: {\n    kb_markdown: md,\n    output_filename: `${baseName}.md`\n  }\n}];"
+      }
+    },
+    {
+      "id": "n23",
+      "name": "Convert KB to File",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [3880, 150],
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "kb_markdown",
+        "binaryPropertyName": "data",
+        "options": { "fileName": "={{ $('Store KB Markdown').first().json.output_filename }}", "mimeType": "text/markdown" }
+      }
+    },
+    {
+      "id": "n24",
+      "name": "Upload KB to Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [4120, 150],
+      "parameters": {
+        "operation": "upload",
+        "name": "={{ $('Store KB Markdown').first().json.output_filename }}",
+        "driveId": { "mode": "list", "value": "My Drive", "cachedResultName": "My Drive" },
+        "folderId": { "mode": "id", "value": "OUTPUT_FOLDER_ID" },
+        "options": {}
+      }
+    },
+    {
+      "id": "n25",
+      "name": "Quarantine Logger",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2680, 650],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const item = $input.first();\nconst j = item.json || {};\n\nconst errorMessage = j.error?.message || j.message || j.extraction_error || JSON.stringify(j).slice(0, 1000);\nconst filename = $('Detect File Type').first()?.json?.original_filename || 'unknown';\n\nreturn [{\n  json: {\n    error_log: JSON.stringify({\n      original_filename: filename,\n      error_message: errorMessage,\n      timestamp: new Date().toISOString()\n    }, null, 2),\n    error_filename: `${filename}.error.json`\n  }\n}];"
+      }
+    },
+    {
+      "id": "n26",
+      "name": "Convert Error to File",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [2920, 650],
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "error_log",
+        "binaryPropertyName": "data",
+        "options": { "fileName": "={{ $('Quarantine Logger').first().json.error_filename }}", "mimeType": "application/json" }
+      }
+    },
+    {
+      "id": "n27",
+      "name": "Upload Error to Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [3160, 650],
+      "parameters": {
+        "operation": "upload",
+        "name": "={{ $('Quarantine Logger').first().json.error_filename }}",
+        "driveId": { "mode": "list", "value": "My Drive", "cachedResultName": "My Drive" },
+        "folderId": { "mode": "id", "value": "QUARANTINE_FOLDER_ID" },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Airtable Trigger": { "main": [[{ "node": "Prompt Config", "type": "main", "index": 0 }]] },
+    "Manual Trigger (Test)": { "main": [[{ "node": "Set Test File ID", "type": "main", "index": 0 }]] },
+    "Set Test File ID": { "main": [[{ "node": "Prompt Config", "type": "main", "index": 0 }]] },
+    "Prompt Config": { "main": [[{ "node": "Download File", "type": "main", "index": 0 }]] },
+    "Download File": { "main": [[{ "node": "Detect File Type", "type": "main", "index": 0 }]] },
+    "Detect File Type": {
+      "main": [
+        [{ "node": "Route by File Type", "type": "main", "index": 0 }],
+        [{ "node": "Quarantine Logger", "type": "main", "index": 0 }]
+      ]
+    },
+    "Route by File Type": {
+      "main": [
+        [{ "node": "Extract PDF", "type": "main", "index": 0 }],
+        [{ "node": "Extract DOCX", "type": "main", "index": 0 }],
+        [{ "node": "Extract TXT", "type": "main", "index": 0 }],
+        [{ "node": "DOC Stub", "type": "main", "index": 0 }],
+        [{ "node": "Unsupported Stub", "type": "main", "index": 0 }]
+      ]
+    },
+    "Extract PDF": {
+      "main": [
+        [{ "node": "Format PDF Extract", "type": "main", "index": 0 }],
+        [{ "node": "Quarantine Logger", "type": "main", "index": 0 }]
+      ]
+    },
+    "Format PDF Extract": {
+      "main": [
+        [{ "node": "Is Scanned PDF?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Is Scanned PDF?": {
+      "main": [
+        [{ "node": "PDF Vision Extract", "type": "main", "index": 0 }],
+        [{ "node": "Pre-strip Web Chrome", "type": "main", "index": 0 }]
+      ]
+    },
+    "PDF Vision Extract": {
+      "main": [
+        [{ "node": "Store Vision Text", "type": "main", "index": 0 }],
+        [{ "node": "Quarantine Logger", "type": "main", "index": 0 }]
+      ]
+    },
+    "Store Vision Text": {
+      "main": [
+        [{ "node": "Pre-strip Web Chrome", "type": "main", "index": 0 }],
+        [{ "node": "Quarantine Logger", "type": "main", "index": 0 }]
+      ]
+    },
+    "Extract DOCX": {
+      "main": [
+        [{ "node": "Pre-strip Web Chrome", "type": "main", "index": 0 }],
+        [{ "node": "Quarantine Logger", "type": "main", "index": 0 }]
+      ]
+    },
+    "Extract TXT": {
+      "main": [
+        [{ "node": "Pre-strip Web Chrome", "type": "main", "index": 0 }],
+        [{ "node": "Quarantine Logger", "type": "main", "index": 0 }]
+      ]
+    },
+    "DOC Stub": { "main": [[{ "node": "Quarantine Logger", "type": "main", "index": 0 }]] },
+    "Unsupported Stub": { "main": [[{ "node": "Quarantine Logger", "type": "main", "index": 0 }]] },
+    "Pre-strip Web Chrome": { "main": [[{ "node": "LLM Stage 1 - Clean", "type": "main", "index": 0 }]] },
+    "LLM Stage 1 - Clean": {
+      "main": [
+        [{ "node": "Store Cleaned Text", "type": "main", "index": 0 }],
+        [{ "node": "Quarantine Logger", "type": "main", "index": 0 }]
+      ]
+    },
+    "Store Cleaned Text": {
+      "main": [
+        [{ "node": "LLM Stage 2 - Classify", "type": "main", "index": 0 }],
+        [{ "node": "Quarantine Logger", "type": "main", "index": 0 }]
+      ]
+    },
+    "LLM Stage 2 - Classify": {
+      "main": [
+        [{ "node": "Parse Classification JSON", "type": "main", "index": 0 }],
+        [{ "node": "Quarantine Logger", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Classification JSON": {
+      "main": [
+        [{ "node": "LLM Stage 3 - Produce KB", "type": "main", "index": 0 }],
+        [{ "node": "Quarantine Logger", "type": "main", "index": 0 }]
+      ]
+    },
+    "LLM Stage 3 - Produce KB": {
+      "main": [
+        [{ "node": "Store KB Markdown", "type": "main", "index": 0 }],
+        [{ "node": "Quarantine Logger", "type": "main", "index": 0 }]
+      ]
+    },
+    "Store KB Markdown": {
+      "main": [
+        [{ "node": "Convert KB to File", "type": "main", "index": 0 }],
+        [{ "node": "Quarantine Logger", "type": "main", "index": 0 }]
+      ]
+    },
+    "Convert KB to File": { "main": [[{ "node": "Upload KB to Drive", "type": "main", "index": 0 }]] },
+    "Quarantine Logger": { "main": [[{ "node": "Convert Error to File", "type": "main", "index": 0 }]] },
+    "Convert Error to File": { "main": [[{ "node": "Upload Error to Drive", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true
+  }
+}

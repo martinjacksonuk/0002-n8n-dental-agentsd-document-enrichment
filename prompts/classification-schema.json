@@ -1,0 +1,52 @@
+{
+  "name": "dental_classification",
+  "strict": true,
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "condition_title": {
+        "type": "string",
+        "description": "Short title of the dental condition or document subject, suitable for use as a filename (e.g. 'Acute Apical Abscess')"
+      },
+      "document_type": {
+        "type": "string",
+        "enum": ["clinical_guideline", "patient_information", "protocol", "factsheet", "other"],
+        "description": "The type of source document"
+      },
+      "audience_segments": {
+        "type": "array",
+        "description": "List of audience-tagged sections found in the document",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "section_title": { "type": "string" },
+            "audience": {
+              "type": "string",
+              "enum": ["Public", "Professional"]
+            }
+          },
+          "required": ["section_title", "audience"]
+        }
+      },
+      "clinical_figures": {
+        "type": "array",
+        "description": "All numeric clinical figures (doses, percentages, ranges, age thresholds) found verbatim in the source",
+        "items": { "type": "string" }
+      },
+      "named_products": {
+        "type": "array",
+        "description": "All named drugs, irrigants, or products mentioned verbatim in the source",
+        "items": { "type": "string" }
+      }
+    },
+    "required": [
+      "condition_title",
+      "document_type",
+      "audience_segments",
+      "clinical_figures",
+      "named_products"
+    ]
+  }
+}
