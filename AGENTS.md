@@ -46,6 +46,12 @@ Project-scoped at `.claude/skills/openai-docs/SKILL.md`. Activates automatically
 - Workflows must include a trigger node (Webhook, Schedule, or Manual trigger).
 - Each workflow JSON file must be stored in the `workflows/` directory.
 
+## Deploying Workflow Changes
+
+- After editing a workflow JSON file in `workflows/` and validating it locally (`n8n_validate_workflow` / `validate_workflow`), push the change to the live n8n instance via `n8n_update_full_workflow` (or `n8n_update_partial_workflow`) without waiting to be asked.
+- Match the live workflow by name via `n8n_list_workflows` to find its ID.
+- Only skip the live push if the user explicitly says to hold off, or if validation surfaces unresolved errors.
+
 ## Sync Requirement
 
 When updating this file, also update **CLAUDE.md** to keep conventions aligned.
