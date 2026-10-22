@@ -16,7 +16,7 @@
 
 ### MCP Server — n8n-mcp
 
-- Installed at `./n8n-mcp/` (gitignored, built locally)
+- Shared server from `../00_agent_toolkit` (pinned `n8n-mcp` npm package); nothing is installed in this project
 - Project-scoped via `.mcp.json` → `start-mcp.sh` (sources `.env` at runtime)
 - Provides 25 tools: node search, template library, live workflow management, validation
 - Instance: `https://n8n.digenie.link/`
