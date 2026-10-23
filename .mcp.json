@@ -1,15 +1,15 @@
 {
   "mcpServers": {
     "n8n-mcp": {
-      "command": "/Users/martinjackson/Desktop/vsc-coding-projects/00_agent_toolkit/mcp/launchers/start-n8n-mcp.sh",
+      "command": "/Users/martinjackson/Desktop/vsc_projects/coding_projects/00_agent_toolkit/mcp/launchers/start-n8n-mcp.sh",
       "args": [
-        "/Users/martinjackson/Desktop/vsc-coding-projects/0002_n8n_dental_agents_document_enrichment"
+        "/Users/martinjackson/Desktop/vsc_projects/coding_projects/0002_n8n_dental_agents_document_enrichment"
       ]
     },
     "digitalocean": {
-      "command": "/Users/martinjackson/Desktop/vsc-coding-projects/00_agent_toolkit/mcp/launchers/start-digitalocean-mcp.sh",
+      "command": "/Users/martinjackson/Desktop/vsc_projects/coding_projects/00_agent_toolkit/mcp/launchers/start-digitalocean-mcp.sh",
       "args": [
-        "/Users/martinjackson/Desktop/vsc-coding-projects/0002_n8n_dental_agents_document_enrichment"
+        "/Users/martinjackson/Desktop/vsc_projects/coding_projects/0002_n8n_dental_agents_document_enrichment"
       ]
     }
   }
